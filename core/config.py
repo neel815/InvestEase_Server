@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: str = ""
+    REDIS_URL: str = ""  # Optional: full Redis URL, if provided overrides REDIS_HOST/PORT
     
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"

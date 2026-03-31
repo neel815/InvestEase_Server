@@ -8,6 +8,7 @@ from core.dependenices import get_current_user
 from core.acl import verify_goal_ownership
 from core.rate_limit import check_rate_limit
 from core.audit import log_access
+from core.redis import cache_delete
 from db.session import get_db
 from schemas.goal import GoalBasketSelect, GoalCreate, GoalOut, SipPlanOut
 from services.goal_service import (
@@ -83,6 +84,10 @@ async def select_goal_basket(
         selected_basket=payload.selected_basket,
         db=db,
     )
+    
+    # Invalidate recommendations cache for this goal
+    cache_key = f"recommendations:{goal_id}"
+    await cache_delete(cache_key)
     
     # Log access
     await log_access(user_id, "UPDATE", "goal", goal_id, db)

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.dependenices import get_current_user
 from core.acl import verify_goal_ownership
 from core.audit import log_access
+from core.redis import cache_get, cache_set
 from db.session import get_db
 from schemas.recommendation import GoalRecommendationsOut
 from services.recommendation_service import get_goal_recommendations
@@ -27,8 +28,19 @@ async def recommendations_for_goal(
         await log_access(user_id, "DENIED", "recommendation", goal_id, db)
         raise e
     
-    # Get recommendations
+    # Check cache first
+    cache_key = f"recommendations:{goal_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        # Log access
+        await log_access(user_id, "READ", "recommendation", goal_id, db)
+        return cached
+    
+    # Get recommendations from DB
     recommendations = await get_goal_recommendations(goal_id=goal_id, user_id=user_id, db=db)
+    
+    # Cache the result with 1 hour TTL
+    await cache_set(cache_key, recommendations.dict(), ttl_seconds=3600)
     
     # Log access
     await log_access(user_id, "READ", "recommendation", goal_id, db)

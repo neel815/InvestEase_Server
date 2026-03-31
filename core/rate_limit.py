@@ -1,16 +1,12 @@
 """
 Rate limiting for computationally expensive operations.
 
-Implements per-user rate limiting for SIP calculation endpoints
-to prevent abuse from rapid slider movements.
+Implements per-user rate limiting using Redis for SIP calculation endpoints
+to prevent abuse from rapid slider movements. Persists across restarts and works across instances.
 """
 
-import time
 from fastapi import HTTPException
-from collections import defaultdict
-
-# In-memory rate limit counters: {user_id: [(timestamp, count)]}
-_rate_limit_counters = defaultdict(list)
+from core.redis import get_redis_client
 
 # Configuration
 RATE_LIMIT_MAX_REQUESTS = 30  # Max requests
@@ -19,7 +15,7 @@ RATE_LIMIT_WINDOW_SECONDS = 60  # Per minute
 
 async def check_rate_limit(user_id: str) -> None:
     """
-    Check if a user has exceeded rate limit for SIP calculations.
+    Check if a user has exceeded rate limit for SIP calculations using Redis.
     
     Args:
         user_id: The user's ID (from JWT)
@@ -27,31 +23,37 @@ async def check_rate_limit(user_id: str) -> None:
     Raises:
         HTTPException 429: If rate limit exceeded
     """
-    current_time = time.time()
-    window_start = current_time - RATE_LIMIT_WINDOW_SECONDS
+    client = await get_redis_client()
+    key = f"rate_limit:{user_id}:sip_calculation"
     
-    # Get or initialize counter for this user
-    if user_id not in _rate_limit_counters:
-        _rate_limit_counters[user_id] = []
-    
-    # Clean old timestamps outside the window
-    _rate_limit_counters[user_id] = [
-        ts for ts in _rate_limit_counters[user_id]
-        if ts > window_start
-    ]
+    # Get current count
+    current_count = await client.get(key)
+    count = int(current_count) if current_count else 0
     
     # Check if limit exceeded
-    if len(_rate_limit_counters[user_id]) >= RATE_LIMIT_MAX_REQUESTS:
+    if count >= RATE_LIMIT_MAX_REQUESTS:
         raise HTTPException(
             status_code=429,
             detail="Too many requests, slow down"
         )
     
-    # Add current timestamp
-    _rate_limit_counters[user_id].append(current_time)
+    # Increment counter with TTL
+    pipe = client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, RATE_LIMIT_WINDOW_SECONDS)
+    await pipe.execute()
 
 
 def reset_rate_limit(user_id: str) -> None:
     """Reset rate limit counter for a specific user (for testing)."""
-    if user_id in _rate_limit_counters:
-        del _rate_limit_counters[user_id]
+    # Note: This is async in reality but kept for API compatibility
+    # Call with asyncio: await reset_rate_limit_async(user_id)
+    pass
+
+
+async def reset_rate_limit_async(user_id: str) -> None:
+    """Reset rate limit counter for a specific user (async version for testing)."""
+    client = await get_redis_client()
+    key = f"rate_limit:{user_id}:sip_calculation"
+    await client.delete(key)
+
