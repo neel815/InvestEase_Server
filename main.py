@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, education, goal, recommendations
+from routers import auth, education, goal, recommendations, portfolio
 from models.audit_log import AuditLog  # Import for Alembic migration tracking
 
 app = FastAPI(title="InvestEase API")
@@ -17,6 +17,7 @@ app.include_router(auth.router)
 app.include_router(goal.router)
 app.include_router(education.router)
 app.include_router(recommendations.router)
+app.include_router(portfolio.router)
 
 
 @app.get("/")
