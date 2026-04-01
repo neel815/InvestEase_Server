@@ -18,6 +18,7 @@ app.include_router(goal.router)
 app.include_router(education.router)
 app.include_router(recommendations.router)
 
+
 @app.get("/")
 async def root():
     return {"status": "InvestEase API running"}

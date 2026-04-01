@@ -39,8 +39,8 @@ async def recommendations_for_goal(
     # Get recommendations from DB
     recommendations = await get_goal_recommendations(goal_id=goal_id, user_id=user_id, db=db)
     
-    # Cache the result with 1 hour TTL
-    await cache_set(cache_key, recommendations.dict(), ttl_seconds=3600)
+    # Cache the result with 1 hour TTL (use model_dump() for Pydantic v2)
+    await cache_set(cache_key, recommendations.model_dump(), ttl_seconds=3600)
     
     # Log access
     await log_access(user_id, "READ", "recommendation", goal_id, db)
