@@ -16,10 +16,52 @@ from schemas.sip import SIPConfirmIn, SIPScheduleOut
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 
-def first_of_next_month_from(dt: datetime) -> date:
-    year = dt.year + (1 if dt.month == 12 else 0)
-    month = 1 if dt.month == 12 else dt.month + 1
-    return date(year, month, 1)
+def calculate_next_sip_date(current_date: date, sip_day: int) -> date:
+    """
+    Calculate the next SIP due date based on current date and target sip_day.
+    
+    Handles edge cases where the target day doesn't exist in a month by using
+    the last valid day of that month.
+    
+    Args:
+        current_date: The reference date (typically today)
+        sip_day: The day of month for SIP (1-31)
+        
+    Returns:
+        The next occurrence of sip_day (or last day of month if sip_day > days in month)
+    """
+    def get_last_day_of_month(year: int, month: int) -> int:
+        """Get the last day of a given month."""
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+        last_day = next_month - timedelta(days=1)
+        return last_day.day
+    
+    # Try this month's sip_day
+    last_day_this_month = get_last_day_of_month(current_date.year, current_date.month)
+    target_day_this_month = min(sip_day, last_day_this_month)
+    
+    try:
+        target_this_month = date(current_date.year, current_date.month, target_day_this_month)
+        if current_date < target_this_month:
+            return target_this_month
+    except ValueError:
+        pass
+    
+    # If today is on or after sip_day this month, use next month
+    if current_date.month == 12:
+        next_year = current_date.year + 1
+        next_month = 1
+    else:
+        next_year = current_date.year
+        next_month = current_date.month + 1
+    
+    last_day_next_month = get_last_day_of_month(next_year, next_month)
+    target_day_next_month = min(sip_day, last_day_next_month)
+    
+    return date(next_year, next_month, target_day_next_month)
 
 
 @router.post("/sip/confirm", response_model=SIPScheduleOut)
@@ -31,8 +73,9 @@ async def confirm_sip(
     # Enforce ACL: only autopilot and copilot allowed
     await require_mode(["autopilot", "copilot"], payload.goal_id, user_id, db)
 
-    # Create SIP schedule
-    next_due = first_of_next_month_from(datetime.utcnow())
+    # Calculate next SIP due date based on sip_day
+    today = date.today()
+    next_due = calculate_next_sip_date(today, payload.sip_day)
 
     new = SIPSchedule(
         user_id=UUID(user_id),
@@ -40,6 +83,7 @@ async def confirm_sip(
         selected_basket=payload.selected_basket,
         monthly_amount=payload.monthly_amount,
         next_due_date=next_due,
+        sip_day=payload.sip_day,
         status="active",
     )
     db.add(new)

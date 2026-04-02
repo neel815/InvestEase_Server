@@ -116,3 +116,27 @@ async def get_sip_plan_for_goal(
         estimated_returns=_round2(estimated_returns),
         year_by_year=year_by_year,
     )
+
+
+async def update_goal_investment_mode(
+    goal_id: UUID,
+    user_id: str,
+    new_mode: str,
+    db: AsyncSession,
+) -> Goal:
+    """Update investment mode for a goal (autopilot -> copilot/manual transition)"""
+    result = await db.execute(
+        select(Goal).where(Goal.id == goal_id, Goal.user_id == UUID(user_id))
+    )
+    goal = result.scalar_one_or_none()
+
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if new_mode not in ["autopilot", "copilot", "manual"]:
+        raise HTTPException(status_code=400, detail="Invalid investment mode")
+
+    goal.investment_mode = new_mode
+    await db.commit()
+    await db.refresh(goal)
+    return goal

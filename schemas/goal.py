@@ -42,3 +42,7 @@ class SipPlanOut(BaseModel):
 
 class GoalBasketSelect(BaseModel):
     selected_basket: Literal["conservative", "moderate", "aggressive"]
+
+
+class GoalInvestmentModeUpdate(BaseModel):
+    investment_mode: Literal["autopilot", "copilot", "manual"]

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from decimal import Decimal
 from datetime import date, datetime
@@ -8,6 +8,7 @@ class SIPConfirmIn(BaseModel):
     goal_id: UUID
     selected_basket: str
     monthly_amount: Decimal
+    sip_day: int = Field(default=1, ge=1, le=31, description="Day of month for SIP (1-31). For months with fewer days, SIP schedules on last day.")
 
 
 class SIPScheduleOut(BaseModel):
@@ -17,11 +18,12 @@ class SIPScheduleOut(BaseModel):
     selected_basket: str
     monthly_amount: Decimal
     next_due_date: date
+    sip_day: int
     status: str
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}
 
 
@@ -34,5 +36,5 @@ class PortfolioSummaryOut(BaseModel):
     last_updated: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}

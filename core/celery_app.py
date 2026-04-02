@@ -3,7 +3,6 @@ Celery app configuration with beat schedule for periodic tasks.
 """
 
 from celery import Celery
-from celery.schedules import crontab
 
 # Initialize Celery app
 app = Celery(
@@ -12,13 +11,8 @@ app = Celery(
     backend="redis://localhost:6379/1",  # Results backend
 )
 
-# Celery beat schedule: run cache_top_funds task daily at midnight
-app.conf.beat_schedule = {
-    "cache-top-funds-daily": {
-        "task": "tasks.fund_cache_task.cache_top_funds",
-        "schedule": crontab(hour=0, minute=0),  # Run at midnight UTC daily
-    },
-}
+# Celery beat schedule - currently empty, tasks will be added in future chunks
+app.conf.beat_schedule = {}
 
 # Additional Celery configuration
 app.conf.update(

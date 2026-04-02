@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from core.dependenices import get_current_user
 from core.acl import verify_goal_ownership
@@ -10,12 +11,14 @@ from core.rate_limit import check_rate_limit
 from core.audit import log_access
 from core.redis import cache_delete
 from db.session import get_db
-from schemas.goal import GoalBasketSelect, GoalCreate, GoalOut, SipPlanOut
+from models.goal import Goal
+from schemas.goal import GoalBasketSelect, GoalCreate, GoalOut, SipPlanOut, GoalInvestmentModeUpdate
 from services.goal_service import (
     create_goal_for_user,
     get_goals_for_user,
     get_sip_plan_for_goal,
     set_selected_basket_for_goal,
+    update_goal_investment_mode,
 )
 
 router = APIRouter(prefix="/goals", tags=["goals"])
@@ -41,6 +44,27 @@ async def get_user_goals(
     goals = await get_goals_for_user(user_id, db)
     await log_access(user_id, "READ", "goal", None, db)
     return goals
+
+
+@router.get("/{goal_id}", response_model=GoalOut)
+async def get_goal(
+    goal_id: UUID,
+    user_id: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific goal by ID"""
+    await verify_goal_ownership(goal_id, user_id, db)
+    
+    result = await db.execute(
+        select(Goal).where(Goal.id == goal_id, Goal.user_id == UUID(user_id))
+    )
+    goal = result.scalar_one_or_none()
+
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    await log_access(user_id, "READ", "goal", goal_id, db)
+    return goal
 
 
 @router.get("/{goal_id}/sip-plan", response_model=SipPlanOut)
@@ -91,4 +115,28 @@ async def select_goal_basket(
     
     # Log access
     await log_access(user_id, "UPDATE", "goal", goal_id, db)
+    return goal
+
+
+@router.patch("/{goal_id}/mode", response_model=GoalOut)
+async def update_goal_mode(
+    goal_id: UUID,
+    payload: GoalInvestmentModeUpdate,
+    user_id: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update investment mode for a goal (e.g., switch from autopilot to manual)"""
+    # Verify ownership
+    await verify_goal_ownership(goal_id, user_id, db)
+    
+    # Update mode
+    goal = await update_goal_investment_mode(
+        goal_id=goal_id,
+        user_id=user_id,
+        new_mode=payload.investment_mode,
+        db=db,
+    )
+    
+    # Log access
+    await log_access(user_id, "UPDATE", "goal_mode", goal_id, db)
     return goal

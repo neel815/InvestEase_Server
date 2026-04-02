@@ -7,9 +7,41 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.recommendation_rules import get_recommended_basket, BASKET_TYPES
-
 logger = logging.getLogger(__name__)
+
+# Basket type constants
+BASKET_TYPES = ("conservative", "moderate", "aggressive")
+
+# Rules for selecting recommended basket based on goal type and investment mode
+GOAL_MODE_BASKET_RULES: dict[tuple[str, str], str] = {
+    ("retirement", "autopilot"): "moderate",
+    ("retirement", "copilot"): "aggressive",
+    ("retirement", "manual"): "aggressive",
+    ("house", "autopilot"): "conservative",
+    ("house", "copilot"): "moderate",
+    ("house", "manual"): "moderate",
+    ("education", "autopilot"): "conservative",
+    ("education", "copilot"): "moderate",
+    ("education", "manual"): "aggressive",
+    ("wealth", "autopilot"): "moderate",
+    ("wealth", "copilot"): "aggressive",
+    ("wealth", "manual"): "aggressive",
+}
+
+# Fallback rules for basket selection by mode
+MODE_FALLBACK_RULES: dict[str, str] = {
+    "autopilot": "conservative",
+    "copilot": "moderate",
+    "manual": "aggressive",
+}
+
+
+def get_recommended_basket(goal_type: str, investment_mode: str) -> str:
+    """Get the recommended basket type for a goal based on type and investment mode."""
+    return GOAL_MODE_BASKET_RULES.get(
+        (goal_type, investment_mode),
+        MODE_FALLBACK_RULES.get(investment_mode, "moderate"),
+    )
 
 
 class RecommendationEngine:
